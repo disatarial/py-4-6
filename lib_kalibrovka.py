@@ -28,7 +28,10 @@ def datakaltabl(tabl,x,y):
     return tabl[numkaltabl(n,x,y)]
    
 # кол-во строчек в таблице
-def lenkaltabl(tabl): 
+def lenkaltabl(tabl):
+   #print(tabl[0])
+   #print(len(tabl))
+   #print(tabl)
    n=int((len(tabl)-1)/tabl[0])
    return n
    
@@ -45,6 +48,7 @@ def printkaltabl(tabl):
       for j in range(tabl[0]):  # внутри строки
          print(datakaltabl(tabl,j,i)," ",end=''),
       print("")
+
 
 
 # "Простая" калибровка [ freq  data ]
@@ -90,7 +94,7 @@ def CreateFreqTable(tabl,beginfreq,endfreq):
    number=0
    newtable=[7] # [number freq, minGenlevel, level, powerlevel,currentlevel,genlevel]
    #print(lenkaltabl(tabl))
-   for i in range(lenkaltabl(tabl)):	# перебираем все строцки по порядку
+   for i in range(lenkaltabl(tabl)):	# перебираем все строчки по порядку
       Freq=datakaltabl(tabl,0,i)		# начальная частота
       #if (Freq>=beginfreq):
       #  print("str=",i,"\r\n",number,Freq)

@@ -13,27 +13,29 @@ import lib_kalibrovka
 import generator
 import fieldmeter
 
-
-wdBeginFreq=0
-wdEndFreq=1
-wdStepFreq=2
-wdStepType=3
-wdMaxGendelta=4
-wddeltaLevel=5
-wdMaxNumSter=6
-wdid_gen=7         #настройки генератора [0-ident, 1-typeinterface, 2-adr, 3-data(port,speed),4-name_pribora]
-wdid_powmet=8
-wdid_kalmet=9
-wdfile_name_amplifier=10
-wdfile_name_otvetvitel=11
-wdfile_koef_kallibrovochnogo_us=12
-wdkal_otvetvitel=13
-wdkal_kalprobe=14
-wdkal_usilitel=15
-wderror=16
-wdfreq=17
+wdfreq=0
+wdBeginFreq=1
+wdEndFreq=2
+wdStepFreq=3
+wdStepType=4
+wdMaxGendelta=5
+wddeltaLevel=6
+wdMaxNumSter=7
+wdid_gen=8         #настройки генератора [0-ident, 1-typeinterface, 2-adr, 3-data(port,speed),4-name_pribora]
+wdid_powmet=9
+wdid_kalmet=10
+wdfile_name_amplifier=11
+wdfile_name_otvetvitel=12
+wdfile_koef_kallibrovochnogo_us=13
+wdkal_otvetvitel=14
+wdkal_kalprobe=15
+wdkal_usilitel=16
+wderror=17
 wdfasttimepause=18
 wdlevel=19
+wdworktime=20 
+wdworkpause=21
+wdwork=22 #  упрваление программой
 
 workdata=[ # ] # все характеристики, которые требуются для запуска цикла испытаний/калибровки
  0.0, #BeginFreq 
@@ -62,6 +64,11 @@ workdata=[ # ] # все характеристики, которые требу�
  ]
 Kal_Table=[] #  [freqbegin, freqend, freqstep, levelbegin,levelend, minGenlevel ]
 Work_Table=[] # табличка для настройки оборудованияя [freq,level, minGenlevel, powerlevel,currentlevel,genlevel,mingenlevel]
+
+Command =0
+threadcommand=1
+
+
 
 def FastPause( time): # пауза которая может быстро закончиться
    for i in range (int(time/50)):
@@ -111,23 +118,95 @@ def LoadTable():
    data.insert(0,2)  
    kal_kalprobe=data
    #print("kal_kalprobe\r\n",kal_kalprobe)
-   #Work_Table =lib_kalibrovka.CreateFreqTable (Kal_Table)   
    workdata[wdkal_usilitel]=kal_amplifier
    workdata[wdkal_otvetvitel]=kal_otvetvitel
    workdata[wdkal_kalprobe]=kal_kalprobe
    
-   
-threadcommand=0
+def workOpenPribors():
+   inst=workdata[wdid_gen]  # скопировали настройки
+   #print(inst)
+   workdata[wdid_gen][0]=generator.Open(inst[1],inst[2],inst[3])
+#   inst=workdata[19]  # скопировали настройки
+   #8, #id_powmet=1
+#   workdata[wdid_powmet]=generator.Open(inst[0],inst[1],inst[2])
+   #inst=workdata[wdid_kalmet]  # скопировали настройки
+   #workdata[wdid_kalmet][0]=fieldmeter.Open(inst[1],inst[2],inst[3])
 
-def workcicle(s):
+def workClosePribors():
+   generator.Close( workdata[wdid_gen][0]   ,workdata[wdid_gen][1])
+   #fieldmeter.Close(workdata[wdid_kalmet][0],workdata[wdid_kalmet][1])
+   
+
+def workcicle():
+  global workdata
   global threadcommand
-  while (1):
-    print (s)
-    sleep(1)
-    if (threadcommand!=0):
-      break
-      
-def OpenPribors():
+  global Work_Table
+  print("start workcicle \r\n",workdata)
+
+  cicle=1 # переменная окончания цикла передора по частоте
+  try:
+    workOpenPribors()
+  except:
+     kallClosePribors()
+     msg = "Порты приборов установлены не  правильно!"
+     mb.showerror("Ошибка", msg)
+
+     return
+  Freq=workdata[wdBeginFreq]
+  print("f[0]=",Work_Table)
+  number=lib_kalibrovka.FindFreqNum(Work_Table,Freq,1)
+  print("lib_kalibrovka.FindFreqNum=",number,Freq)
+  while (cicle ): 
+     workdata[wdfreq]=Freq
+     # подаем частоту с генератора
+     try:
+        generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
+     except:
+       workClosePribors()
+       threadcommand=1
+       msg = "нет связи с генератором!"
+       mb.showerror("Ошибка", msg)
+       return
+     # =========================================================================================================================
+     # подаем мощность с генератора
+     genlevel=lib_kalibrovka.datakaltabl(Work_Table,5,number)
+     try:
+       generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
+     except:
+       workClosePribors()
+       threadcommand=1
+       msg = "нет связи с генератором!"
+       mb.showerror("Ошибка",msg)
+       return
+     FastPause( workdata[wdworktime])
+
+     # берем следующую частоту, или готовим команду к завершении работы
+     number=number+1
+     if (number>=(lib_kalibrovka.lenkaltabl(Work_Table))): 
+        cicle =0	 
+     else:
+        Freq=lib_kalibrovka.datakaltabl(Work_Table,1,number)
+
+     # условие окончания цикла по частотам
+     if ((workdata[wdStepFreq] > 0)and (Freq > workdata[wdEndFreq])):  # цикл вверх по частоте
+        cicle =0
+     if ((workdata[wdStepFreq] < 0)and (Freq <workdata[wdBeginFreq])):  # цикл вниз по частоте
+        cicle =0	      
+     generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][4])
+     FastPause( workdata[wdworkpause])
+     if (threadcommand!=0): 
+        cicle=0
+        print("cicle==0",threadcommand)
+       
+
+  
+  lib_kalibrovka.printkaltabl(Work_Table)
+  workClosePribors()
+  threadcommand=1
+
+
+
+def kallOpenPribors():
    inst=workdata[wdid_gen]  # скопировали настройки
    #print(inst)
    workdata[wdid_gen][0]=generator.Open(inst[1],inst[2],inst[3])
@@ -137,7 +216,8 @@ def OpenPribors():
    inst=workdata[wdid_kalmet]  # скопировали настройки
    workdata[wdid_kalmet][0]=fieldmeter.Open(inst[1],inst[2],inst[3])
 
-def ClosePribor():
+def kallClosePribors():
+   generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][4])
    generator.Close( workdata[wdid_gen][0]   ,workdata[wdid_gen][1])
    fieldmeter.Close(workdata[wdid_kalmet][0],workdata[wdid_kalmet][1])
 
@@ -146,15 +226,15 @@ def kallcicle():
   global workdata
   global threadcommand
   global Work_Table
-  #LoadTable()
   print("start kallcicle \r\n",workdata)
   cicle=1 # переменная окончания цикла передора по частоте
   try:
-    OpenPribors()
+    kallOpenPribors()
   except:
-     msg = "Порты приборов установленф не  правильно!"
      mb.showerror("Ошибка", msg)
-     ClosePribor()
+     threadcommand=1
+     kallClosePribors()
+     msg = "Порты приборов установлены не  правильно!"
      return
   Freq=workdata[wdBeginFreq]
   number=lib_kalibrovka.FindFreqNum(Work_Table,Freq,1)
@@ -163,34 +243,57 @@ def kallcicle():
      # подаем частоту с генератора
      try:
         generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
+        generator.WriteOn(workdata[wdid_gen][0],workdata[wdid_gen][4])
      except:
+       kallClosePribors()
+       threadcommand=1
        msg = "нет связи с генератором!"
        mb.showerror("Ошибка", msg)
-       ClosePribor()
+       return
+     # устанавливаем частоту на приемнике
+     try:
+        fieldmeter.WriteFreq(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4],Freq)    #handle_gen,id_gen,Freq
+     except:
+       threadcommand=1
+       kallClosePribors()
+       msg = "нет связи с измерителем!"
+       mb.showerror("Ошибка", msg)
        return
 
      # =========================================================================================================================
      # подаем мощность с генератора
      genlevel=lib_kalibrovka.datakaltabl(Work_Table,2,number)
-     generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
+     try:
+       generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
+     except:
+       threadcommand=1     
+       msg = "нет связи с генератором!"
+       mb.showerror("Ошибка",msg)
+       kallClosePribors()
+       return
      FastPause(300)
      try:
-        Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4]) # ...read....
+       Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4]) # ...read....
+
+       numfreqUres=lib_kalibrovka.FindFreqNum(  workdata[wdkal_kalprobe],Freq,0) # находим коэфициент пробника ( антенны, тока...)
+       Ures=Ures+lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],1,numfreqUres) # добавляем этот коэф к измеренным данным
      except:
+       threadcommand=1
+       kallClosePribors()
        msg = "нет связи с измерителем!"
        mb.showerror("Ошибка", msg)
-       ClosePribor()
+       threadcommand=1
        return
      flag=(abs(lib_kalibrovka.datakaltabl(Work_Table,3,number)+workdata[wddeltaLevel]-Ures)> workdata[wddeltaLevel])
      NumSter=0
      while flag: 
-         try:
-            generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
-         except:
-            msg = "нет связи с генератором!"
-            mb.showerror("Ошибка", msg)
-            ClosePribor()
-            return
+         #try:
+         #   generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
+         #except:
+         #   msg = "нет связи с генератором!"
+         #   mb.showerror("Ошибка", msg)
+         #   ClosePribors()
+         #   return
          workdata[wdlevel]=Ures
 #         print("while:")
          NumSter=NumSter+1
@@ -198,9 +301,21 @@ def kallcicle():
          generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
 #         # измеряем сигнал на измерителе, добавляем его коэффициент из таблички
          try:
-            Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4]) # ...read....
+           #if (workdata[wdworktype]):
+	   
+           Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4]) # ...read....
+           numfreqUres=lib_kalibrovka.FindFreqNum(  workdata[wdkal_kalprobe],Freq,0) # находим коэфициент пробника ( антенны, тока...)
+           print("ures+ ",lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],1,numfreqUres)) # добавляем этот коэф к измеренным данным
+           Ures=Ures+lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],1,numfreqUres) # добавляем этот коэф к измеренным данным
+
+           #else:
+              #Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4]) # ...read....
+            #  Uotv=0 # ...read....
          except:
-            ClosePribor()
+            threadcommand=1
+            kallClosePribors()
+            msg = "нет связи с измерителем!"
+            mb.showerror("Ошибка", msg)
             return
  
          delta=lib_kalibrovka.NewAmplituda(lib_kalibrovka.datakaltabl(Work_Table,3,number)+workdata[wddeltaLevel],genlevel,Ures)
@@ -211,12 +326,13 @@ def kallcicle():
          else:
             genlevel=genlevel+delta
 
-#         # ограничиваем максимальный сигнал.(данные должны братся из таблице усилителя
-#         numfrequs=lib_kalibrovka.FindFreqNum(Freq, workdata[wdkal_usilitel])
-#	 #maxgen=lib_kalibrovka.datakaltabl(workdata[wdkal_usilitel],1,numfrequs)
-#	# print(genlevel,numfrequs,maxgen)
-#	 #if (genlevel>maxgen): 
-#           # genlevel=maxgen
+         # ограничиваем максимальный сигнал.(данные должны братся из таблице усилителя
+         numfrequs=lib_kalibrovka.FindFreqNum(  workdata[wdkal_usilitel],Freq,0)
+         maxgen=lib_kalibrovka.datakaltabl(workdata[wdkal_usilitel],1,numfrequs)
+         #print(genlevel,numfrequs,maxgen)
+         if (genlevel>maxgen): 
+            genlevel=maxgen
+            print("maxpower input generator")
          workdata[wdfreq]=Freq
          FastPause(1000)
    
@@ -225,10 +341,16 @@ def kallcicle():
            flag=0   
            print("cicle==0",threadcommand)
          else:   # break
+           #if (workdata[wdworktype]):
            flag=(abs(lib_kalibrovka.datakaltabl(Work_Table,3,number)+workdata[wddeltaLevel]-Ures)> workdata[wddeltaLevel])
-
+           #else:
+           #   flag=-1
+     FastPause( workdata[wdworktime])
+     # запоминаем значения генератора, и поля
      Work_Table[lib_kalibrovka.adrkaltabl(Work_Table,5,number)]=genlevel
      Work_Table[lib_kalibrovka.adrkaltabl(Work_Table,6,number)]=Ures
+
+     # берем следующую частоту, или готовим команду к завершении работы
      number=number+1
      if (number>=(lib_kalibrovka.lenkaltabl(Work_Table))): 
         cicle =0	 
@@ -242,12 +364,30 @@ def kallcicle():
         cicle =0	      
      
      #измеряем сигнал на ответвителе, добавляем его коэффициент из таблички
-     Uotv=0 # ...read....
+     #if (workdata[wdworktype]):      
+     #   Uotv=0 # ...read....
+     generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][4])
+     FastPause( workdata[wdworkpause])
+
+  generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][4])
   lib_kalibrovka.printkaltabl(Work_Table)
-  ClosePribor()
+  kallClosePribors()
+  lib_kalibrovka.printkaltabl(Work_Table)
   
+  if (threadcommand==0): # сохраняем только когда нормальное завершение работы
+    filename = fd.asksaveasfile(initialdir='./worktable',filetypes=[('kal_types','*.kal')]) 
+    if filename:
+      for i in range(lib_kalibrovka.lenkaltabl(Work_Table)):  # построчно
+        for j in range(Work_Table[0]):  # внутри строки
+           data=(lib_kalibrovka.datakaltabl(Work_Table,j,i))	
+           print(data )
+           filename.write(str(data))
+           filename.write(" ")
+        filename.write("\r") 
+      filename.close()
+  threadcommand=1
 
-
+   
 config_file ="setting.ini"
 def NastrPribor():
    Nastrwindow = Toplevel( )
@@ -255,7 +395,10 @@ def NastrPribor():
    labelCurrent= Label(Nastrwindow,text=config.get('workdata','filecurrent'), font="Arial 12")
    labelkkal=Label(Nastrwindow,text=config.get('workdata','filekkal'), font="Arial 12")
    labelAmplifier=Label(Nastrwindow,text=config.get('workdata','amplifier'), font="Arial 12")
+ 
 
+   
+   
    def btnKotv_clik():
        file_name = fd.askopenfilename(initialdir='./pribor',filetypes=[('kal_types','*.kal')])
        fileotvet = open(file_name)
@@ -300,6 +443,7 @@ def NastrPribor():
    def btnotmena_clik():
        Nastrwindow.destroy()
        Nastrwindow.update()
+ 
        print(' btnotmena_clik = \r\n')
 
    def btnnorma_clik():
@@ -326,17 +470,23 @@ def NastrPribor():
        
        Nastrwindow.destroy()
        Nastrwindow.update()
+ 
        f = open(config_file, 'w')
        config.write(f)
        f.close()
 
+   def on_Nastrwindow_closing():
+      global threadcommand
+      #if messagebox.askokcancel("Quit", "Do you want to quit?"):
+      threadcommand=1
+      Nastrwindow.destroy()
+    
    print("NastrPribor")
+   Nastrwindow.protocol("WM_DELETE_WINDOW", on_Nastrwindow_closing)    
      
    Nastrwindow_label_0_0="Настройка оборудования"
    Nastrwindow_l0 = Label(Nastrwindow,text=Nastrwindow_label_0_0, font="Arial 20")
    Nastrwindow_l0.grid(row=0, column=0,columnspan =4)
-
-
 
    namelabel5="Генератор:"
    l5 = Label(Nastrwindow,text=namelabel5, font="Arial 12")
@@ -395,7 +545,8 @@ def NastrPribor():
    l7.grid(row=11, column=0)
    namekalmeter = ttk.Combobox(Nastrwindow, 
                             values=["Нет",
-			            "narda ep60x" ])
+			            "narda ep60x" ,
+				    "advantest R3361C"])
    namekalmeter.grid(row=11, column=1,sticky=N+S+W+E)
    namekalmeter.current(config.get('workdata','kalmetertype'))
 
@@ -418,7 +569,7 @@ def NastrPribor():
    label_kalmeterdata.insert(0, config.get('workdata','kalmeterdata'))
 
 
-   namelabel8="Коэф. ответвителя:"
+   namelabel8="Коэф. ответвителя мощности:"
    l8 = Label(Nastrwindow,text=namelabel8, font="Arial 12")
    l8.grid(row=12, column=0,columnspan =2)
 
@@ -428,14 +579,14 @@ def NastrPribor():
    btnKotv = Button(Nastrwindow,text=" kotv",command=btnKotv_clik)
    btnKotv.grid(row=12, column=3,sticky=N+S+W+E,columnspan =2)
 
-   namelabel9="Коэф. токосьемника:"
+   namelabel9="Коэф. измерителя калибровки:"
    l9 = Label(Nastrwindow,text=namelabel9, font="Arial 12")
-   l9.grid(row=13, column=0,columnspan =2)
+   #l9.grid(row=13, column=0,columnspan =2)
 
-   labelCurrent.grid(row=13, column=2)
+   #labelCurrent.grid(row=13, column=2)
 
    btnCurren = Button(Nastrwindow,text=" kcurrent",command=btnCurrent_clik)
-   btnCurren.grid(row=13, column=3,sticky=N+S+W+E,columnspan =2)
+   #btnCurren.grid(row=13, column=3,sticky=N+S+W+E,columnspan =2)
    
    namelabel10="Коэф. калибровочного устройства:"
    l10 = Label(Nastrwindow,text=namelabel10, font="Arial 12")
@@ -481,6 +632,8 @@ def NastrPribor():
    btnotmena = Button(Nastrwindow,text=" Отменить ",command=btnotmena_clik)
    btnotmena.grid(row=20, column=2,sticky=N+S+W+E)
 
+
+
    Nastrwindow.transient(root)
    Nastrwindow.grab_set()
    Nastrwindow.focus_set()   
@@ -488,11 +641,13 @@ def NastrPribor():
 # -------------------------------------------------------------------------------
 
 def Kalibrovka():
+   Kallwindow = Toplevel( )
+   
    def save():
       config.set('workdata','BeginFreq',str(label_begin_freq.get()))
       config.set('workdata','EndFreq',str(label_end_freq.get()))
-      config.set('workdata','stepfreq',str(label_step_freq.get()))
-      config.set('workdata','steptype',str(combosteptype.current()))
+      #config.set('workdata','stepfreq',str(label_step_freq.get()))
+      #config.set('workdata','steptype',str(combosteptype.current()))
       file_name=labelkalltable['text']
       #f=os.path.relpath(file_name , start='./kal')
       #print(f)
@@ -500,14 +655,14 @@ def Kalibrovka():
       labelkalltable.config(text = file_name)
 
    def StartProdKal():
-      workdata[wdBeginFreq]= workdata[wdfreq]
-      StartKal()
+      #workdata[wdBeginFreq]= workdata[wdfreq]
+      StartKal(0)
       
    def StartBeginKal():
-      workdata[wdBeginFreq]=float(config.get('workdata','beginfreq'))
-      StartKal()
+      #workdata[wdBeginFreq]=float(config.get('workdata','beginfreq'))
+      StartKal(1)
    
-   def StartKal():
+   def StartKal(work):
       print("StartKal")
       global threadcommand
       global Work_Table
@@ -516,9 +671,12 @@ def Kalibrovka():
       
       BeginFreq=float(label_begin_freq.get())
       EndFreq=float(label_end_freq.get())
-      print('\r\nstartkall:\r\n',BeginFreq,EndFreq,'\r\n')
-      #workdata[wdBeginFreq]=float(config.get('workdata','beginfreq'))
-      workdata[wdEndFreq]=float(config.get('workdata','endfreq'))
+      #print('\r\nstartkall:\r\n',BeginFreq,EndFreq,'\r\n')
+      if (work):
+        workdata[wdBeginFreq]=float(config.get('workdata','beginfreq'))
+        workdata[wdEndFreq]=float(config.get('workdata','endfreq'))
+      else:
+        workdata[wdBeginFreq]= workdata[wdfreq]
       workdata[wdStepFreq]=float(config.get('workdata','stepfreq'))
       workdata[wdStepType]=int(config.get('workdata','steptype'))
       workdata[wdMaxGendelta]=int(config.get('workdata','maxgendelta')) #MaxGendelta =10  #ограничение на  прибавление в можности
@@ -528,24 +686,23 @@ def Kalibrovka():
       workdata[wdfile_name_otvetvitel ]=config.get('workdata','fileotvet')#file_name_otvetvitel
       workdata[wdfile_koef_kallibrovochnogo_us ]=config.get('workdata','filekkal')#kal_otvetvitel
 
+      if (work):
 
+        # загружаем  калибровочную таблицу
+        file_name=config.get('workdata','kaltable')# kal table
+        data=[]
+        File  = open("./kaltable/"+file_name)
+        strdata= File.read()
+        File .close()	    
+        strdata=(strdata.split())
+        for i in range(len(strdata)):
+          data.append(float(strdata[i]))
+        data.insert(0,7)
+	
+        Kal_Table=data
+        LoadTable()
+        Work_Table=lib_kalibrovka.CreateFreqTable (data,workdata[wdBeginFreq],workdata[wdEndFreq])
 
-      # загружаем  калибровочную таблицу
-      file_name=config.get('workdata','kaltable')# kal table
-      data=[]
-      File  = open("./kaltable/"+file_name)
-      strdata= File.read()
-      File .close()	    
-      strdata=(strdata.split())
-      for i in range(len(strdata)):
-         data.append(float(strdata[i]))
-      data.insert(0,7)
-
-      Kal_Table=data
-      
-      
-      LoadTable()
-      Work_Table=lib_kalibrovka.CreateFreqTable (data,workdata[wdBeginFreq],workdata[wdEndFreq])
       lib_kalibrovka.printkaltabl(Work_Table)
       
       workdata[wdid_gen]    = [0,int(config.get('workdata','typegenport')),        int(config.get('workdata','genport')),        int(config.get('workdata','genportdata')),    int(config.get('workdata','gentype'))]
@@ -586,16 +743,16 @@ def Kalibrovka():
          print(lib_kalibrovka.datakaltabl(workdata[wdkal_usilitel],0,lib_kalibrovka.lenkaltabl(workdata[wdkal_usilitel])-1))   
          start=152   
 
-
-
       workdata[wdfasttimepause]=0
       print("\r\nstart=",start)
       #print("\r\n", data)
       if (start==0):
-        thread1 = Thread(target= kallcicle)  
+        #workdata[wdworktype]=0 # режим калибровки
         threadcommand=0
+        thread1 = Thread(target= kallcicle)  
         thread1.start()
-      
+        threadcommand=0
+	
    def StopKal():
      global threadcommand
      global workdata
@@ -613,10 +770,6 @@ def Kalibrovka():
       config.set('workdata','kaltable',f)
       labelkalltable.config(text = f)
      # files = file_name
-
-
-
-
       
    def savexit():
       print("savexit")
@@ -628,21 +781,64 @@ def Kalibrovka():
       Kallwindow.destroy()
       Kallwindow.update() 
 
-   def timing():
+   def timing_kal():
+      global threadcommand
       while (1):
-        label_tek_freq.delete(0,last=END)
-        label_tek_freq.insert(0,str(workdata[wdfreq] ))
-        label_tek_kal.delete(0,last=END)
-        label_tek_kal.insert (0,str(workdata[wdlevel]))
-        #print("time")
-        sleep(0.3)
-        #if (threadcommand!=0):
-           #break
+        try:
+          label_tek_freq_kal.delete(0,last=END)
+          label_tek_freq_kal.insert(0,str(workdata[wdfreq] ))
+          label_tek_kal.delete(0,last=END)
+          label_tek_kal.insert (0,str(workdata[wdlevel]))
+        except:
+          print("win_close")
+          break
+        if (threadcommand):
+          btnkalltable['state'] ='active'
+          btnnewtabl['state'] ='active'
+          btnedit['state'] ='active'
+          btnexit['state'] ='active'
+          btnStart['state'] ='active'
+          btnPause['state'] ='active'
+          btnStop['state'] ='disabled'
+
+        else:       
+          btnkalltable['state'] ='disabled'
+          btnnewtabl['state'] ='disabled'
+          btnedit['state'] ='disabled'
+          btnexit['state'] ='disabled'
+          btnStart['state'] ='disabled'
+          btnPause['state'] ='disabled'
+          btnStop['state'] ='active'
+        sleep(1.3)
+        print("+",threadcommand)
+	
+   def CreqteNewTable():
+      print("CreqteNewTable")
        
+   def EditNewTable():
+      print("EditNewTable")
+    
+   def on_Kallwindow_closing():
+      global threadcommand
+      #if messagebox.askokcancel("Quit", "Do you want to quit?"):
+      threadcommand=1
+      #sleep(1)
+
+      Kallwindow.destroy()
+ 
+      print("Kalibrovka destroy")
+      
+
    print("Kalibrovka")
+   
+   
    workdata[wdfreq] =0
    workdata[wdlevel]=0
-   Kallwindow = Toplevel( )
+   
+   Kallwindow.protocol("WM_DELETE_WINDOW", on_Kallwindow_closing)    
+   
+    
+   
    Kallwindow_label_0_0="Режим калибровки"
    Kallwindow_l0 = Label(Kallwindow,text=Kallwindow_label_0_0, font="Arial 20")
    Kallwindow_l0.grid(row=0, column=0,columnspan =4)
@@ -654,8 +850,8 @@ def Kalibrovka():
    l1 = Label(Kallwindow,text=namelabel1, font="Arial 12")
    l1.grid(row=2, column=0)
 
-   label_tek_freq=Entry(Kallwindow, width=10)
-   label_tek_freq.grid(row=2, column=2,sticky=N+S+W+E)
+   label_tek_freq_kal=Entry(Kallwindow, width=10)
+   label_tek_freq_kal.grid(row=2, column=2,sticky=N+S+W+E)
 
    label_tek_kal=Entry(Kallwindow, width=10)
    label_tek_kal.grid(row=2, column=3,sticky=N+S+W+E)
@@ -673,13 +869,6 @@ def Kalibrovka():
    btnStop.grid(row=3, column=3,sticky=N+S+W+E)
 
 
-   namelabel9="Калибровочная таблица:"
-   l9 = Label(Kallwindow,text=namelabel9, font="Arial 12")
-   l9.grid(row=4, column=0,columnspan =2)
-
-   labelkalltable.grid(row=4, column=2)
-   btnkalltable = Button(Kallwindow,text=" Выбрать",command=btnkallTabl_clik)
-   btnkalltable.grid(row=4, column=3,sticky=N+S+W+E)
 
    namelabel1="Нач.Частота, МГц:"
    l1 = Label(Kallwindow,text=namelabel1, font="Arial 12")
@@ -695,36 +884,133 @@ def Kalibrovka():
    label_end_freq.grid(row=6, column=2,sticky=N+S+W+E)
    label_end_freq.insert(0, config.get('workdata','EndFreq'))
 
-   namelabel3="Шаг Частоты:"
-   l3 = Label(Kallwindow,text=namelabel3, font="Arial 12")
-   l3.grid(row=7, column=0,columnspan =2)
-   label_step_freq=Entry(Kallwindow, width=10)
-   label_step_freq.grid(row=7, column=2,sticky=N+S+W+E)
-   label_step_freq.insert(0, config.get('workdata','stepfreq'))
+   namelabel9="Калибровочная таблица:"
+   l9 = Label(Kallwindow,text=namelabel9, font="Arial 12")
+   l9.grid(row=7, column=0,columnspan =4)
 
-   combosteptype = ttk.Combobox(Kallwindow, 
-                            values=[
-                                    "%", 
-                                    "кГц",
-                                    "MГц"])
-   combosteptype.grid(row=7, column=3,sticky=N+S+W+E)
-   combosteptype.current(config.get('workdata','steptype'))
+   labelkalltable.grid(row=8, column=0)
+   btnkalltable = Button(Kallwindow,text=" Выбрать",command=btnkallTabl_clik)
+   btnkalltable.grid(row=8, column=1,sticky=N+S+W+E)
+
+
+   btnnewtabl = Button(Kallwindow,text="создать",command=CreqteNewTable)
+   btnnewtabl.grid(row=8,column=2,sticky=N+S+W+E)
+
+   btnedit = Button(Kallwindow,text=" редактировать",command=EditNewTable)
+   btnedit.grid(row=8,column=3,sticky=N+S+W+E)
 
    btnexit = Button(Kallwindow,text=" Сохранить и выйти",command=savexit)
-   btnexit.grid(row=8,column=0,columnspan =4,sticky=N+S+W+E)
-   threadcommand=0
-   t=Thread(target=timing)
+   btnexit.grid(row=10,column=0,columnspan =4,sticky=N+S+W+E)
+
+
+   threadcommand=1
+   t=Thread(target=timing_kal)
    t.start()
+
+   Kallwindow.transient(root)
+   Kallwindow.grab_set()
+   Kallwindow.focus_set()   
+   Kallwindow.wait_window() 
    
    
 def StartWork():	
   global threadcommand
+  global Work_Table
+  global workdata
   BeginFreq=float(label_begin_freq.get())
   EndFreq=float(label_end_freq.get())
-  print('\r\nstartkall:\r\n',BeginFreq,EndFreq,'\r\n')
-  thread1 = Thread(target= workcicle, args=('+'))  
-  threadcommand=0
-  thread1.start()
+  print('\r\nstartwork:\r\n',BeginFreq,EndFreq,'\r\n')
+  BeginFreq=float(label_begin_freq.get())
+  EndFreq=float(label_end_freq.get())
+  workdata[wdBeginFreq]=float(BeginFreq)
+  workdata[wdEndFreq]=float(EndFreq)
+  #workdata[wdBeginFreq]=float(config.get('workdata','beginfreq'))
+  #workdata[wdEndFreq]=float(config.get('workdata','endfreq'))
+  workdata[wdStepFreq]=float(config.get('workdata','stepfreq'))
+  workdata[wdStepType]=int(config.get('workdata','steptype'))
+  workdata[wdMaxGendelta]=int(config.get('workdata','maxgendelta')) #MaxGendelta =10  #ограничение на  прибавление в можности
+  workdata[wddeltaLevel]=int(config.get('workdata','deltalevel'))#    #deltaLevel=1    # точность установки
+  workdata[wdMaxNumSter]=int(config.get('workdata','maxnumster')) #     #MaxNumSter=30  # макс кол-во шагов при настройка ( в случае внезапной нелинейности схемы)
+  workdata[wdfile_name_amplifier]=config.get('workdata','amplifier')#file_name_amplifier
+  workdata[wdfile_name_otvetvitel ]=config.get('workdata','fileotvet')#file_name_otvetvitel
+  workdata[wdfile_koef_kallibrovochnogo_us ]=config.get('workdata','filekkal')#kal_otvetvitel
+
+  # загружаем  калибровочную таблицу
+  file_name=config.get('workdata','worktable')# kal table
+  data=[]
+  File  = open("./worktable/"+file_name)
+  strdata= File.read()
+  File .close()	    
+  strdata=(strdata.split())
+  for i in range(len(strdata)):
+      data.append(float(strdata[i]))
+  data.insert(0,7)
+
+  Work_Table=data
+    
+      
+  LoadTable()
+  workdata[wdworktime]=int(label_time.get())
+  workdata[wdworkpause]=int(label_pause.get())
+
+  #Work_Table=lib_kalibrovka.CreateFreqTable (data,workdata[wdBeginFreq],workdata[wdEndFreq])
+  lib_kalibrovka.printkaltabl(Work_Table)
+      
+  workdata[wdid_gen]    = [0,int(config.get('workdata','typegenport')),        int(config.get('workdata','genport')),        int(config.get('workdata','genportdata')),    int(config.get('workdata','gentype'))]
+  workdata[wdid_powmet] = [0,int(config.get('workdata','typepowermeterport')), int(config.get('workdata','powermeterport')), int(config.get('workdata','powermeterdata')), int(config.get('workdata','powermetertype'))]
+  workdata[wdid_kalmet] = [0,int(config.get('workdata','typekalmeterport')),   int(config.get('workdata','kalmeterport')),   int(config.get('workdata','kalmeterdata')),   int(config.get('workdata','kalmetertype'))]
+
+  print(workdata)
+
+  # проверка параметров запуска по частотам применяемого оборудованрия
+  start=0
+  if ((start==0) & (workdata[wdBeginFreq]<lib_kalibrovka.datakaltabl(workdata[wdkal_otvetvitel],0,0))): # начальная частота меньше частоты ответвителя
+     #  13, #kal_otvetvitel=[]   
+     print(lib_kalibrovka.datakaltabl(workdata[wdkal_otvetvitel],0,0))
+     start=231   
+     
+  if ((start==0) & (workdata[wdBeginFreq]<lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],0,0))): # начальная частота меньше частоты пробника
+  	 # 14, #kal_kalprobe=[]
+     print(lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],0,0))   
+     start=241   
+
+  if ((start==0) & (not(workdata[wdBeginFreq]>=lib_kalibrovka.datakaltabl(workdata[wdkal_usilitel],0,0)))):  # начальная частота меньше частоты усилителя
+     # 15, #kal_usilitel=[]
+     print("amplifier=",workdata[wdBeginFreq],lib_kalibrovka.datakaltabl(workdata[wdkal_usilitel],0,0))   
+     start=251   
+
+  if ((start==0) & (not(workdata[wdEndFreq]<=lib_kalibrovka.datakaltabl(workdata[wdkal_otvetvitel],0,lib_kalibrovka.lenkaltabl(workdata[wdkal_otvetvitel])-1 )))): # конечная частота больще частоты ответвителя
+     #  13, #kal_otvetvitel=[]   
+     print(lib_kalibrovka.datakaltabl(workdata[wdkal_otvetvitel],0,lib_kalibrovka.lenkaltabl(workdata[wdkal_otvetvitel])-1))
+     start=232   
+
+  if ((start==0) & (workdata[wdEndFreq]>lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],0,lib_kalibrovka.lenkaltabl(workdata[wdkal_kalprobe])-1))): # конечная частота больще  частоты пробника
+     # 14, #kal_kalprobe=[]
+     print(lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],0,lib_kalibrovka.lenkaltabl(workdata[wdkal_kalprobe])-1))   
+     start=242   
+
+  if ((start==0) & (workdata[wdEndFreq]>lib_kalibrovka.datakaltabl(workdata[wdkal_usilitel],0,lib_kalibrovka.lenkaltabl(workdata[wdkal_usilitel])-1))):  # конечная частота больще  частоты усилителя
+     # 15, #kal_usilitel=[]
+     print(lib_kalibrovka.datakaltabl(workdata[wdkal_usilitel],0,lib_kalibrovka.lenkaltabl(workdata[wdkal_usilitel])-1))   
+     start=252   
+  workdata[wdfasttimepause]=0     
+  print("start=",start)  
+  if (start==0):
+     #workdata[wdworktype]=1 # режим работы
+     threadcommand=0
+     print(Work_Table)
+     thread1 = Thread(target= workcicle)  
+     thread1.start()  
+  
+  #thread1 = Thread(target= workcicle, args=('+'))  
+  #threadcommand=0
+  #thread1.start()
+#  btnStart['state'] ='disabled'
+#  btnPause['state'] ='active'
+#  btnStop['state'] = 'active'  
+#  btnPribors['state'] = 'disabled'
+#  btnKallibr['state'] = 'disabled'
+#  btnkalltable['state'] = 'disabled'
 #  thread1.join();
 
 
@@ -732,6 +1018,12 @@ def StopWork():
   global threadcommand
   threadcommand=1
   print("StopWork")
+#  btnStart['state'] ='active'
+#  btnPause['state'] ='disabled'
+#  btnStop['state'] = 'disabled'
+#  btnPribors['state'] = 'active'
+#  btnKallibr['state'] = 'active'
+#  btnkalltable['state'] = 'active'  
   
 config = configparser.ConfigParser()  # создаём объекта парсера
 config.read(config_file )  # читаем конфиг
@@ -750,9 +1042,15 @@ def btnkallTabl_clik():
       config.set('workdata','worktable',f)
       labelkalltable.config(text = f)
 
+def on_closing():
+    global threadcommand
+   #if messagebox.askokcancel("Quit", "Do you want to quit?"):
+    threadcommand=1
+    root.destroy()
 
+root.protocol("WM_DELETE_WINDOW", on_closing)
 
-
+   
 namelabel_0_0="Испытания "
 l0 = Label(text=namelabel_0_0, font="Arial 20")
 l0.grid(row=0, column=0,columnspan =4)
@@ -832,5 +1130,43 @@ btnPribors.grid(row=10, column=1,sticky=N+S+W+E)
 
 btnKallibr = Button(text=" Режим калибровки",command=Kalibrovka)
 btnKallibr.grid(row=10, column=3,sticky=N+S+W+E)
+
+#btnStart['state'] ='active'
+#btnPause['state'] ='disabled'
+#btnStop['state'] = 'disabled'
+#btnPribors['state'] = 'active'
+#btnKallibr['state'] = 'active'
+#btnkalltable['state'] = 'active'
+
+def timing_main():
+   global threadcommand
+   while (1):
+     try:
+          label_tek_freq.delete(0,last=END)
+          label_tek_freq.insert(0,str(workdata[wdfreq] ))
+     except:
+          print("win_close")
+          break
+     if (threadcommand):
+       btnStart['state'] ='active'
+       btnPause['state'] ='disabled'
+       btnStop['state'] = 'disabled'
+       btnPribors['state'] = 'active'
+       btnKallibr['state'] = 'active'
+       btnkalltable['state'] = 'active'
+     else:       
+       btnStart['state'] ='disabled'
+       btnPause['state'] ='active'
+       btnStop['state'] = 'active'
+       btnPribors['state'] = 'disabled'
+       btnKallibr['state'] = 'disabled'
+       btnkalltable['state'] = 'disabled'
+     sleep(1.3)	
+     print("-",threadcommand)
+
+	
+ 
+t=Thread(target=timing_main)
+t.start() 
 
 root.mainloop()
