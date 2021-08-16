@@ -35,7 +35,7 @@ wdfasttimepause=18
 wdlevel=19
 wdworktime=20 
 wdworkpause=21
-wdwork=22 #  упрваление программой
+wdwork=22 #  упраление программой
 
 workdata=[ # ] # все характеристики, которые требуются для запуска цикла испытаний/калибровки
  0.0, #BeginFreq 
@@ -160,7 +160,7 @@ def workcicle():
      workdata[wdfreq]=Freq
      # подаем частоту с генератора
      try:
-        generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
+        generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
      except:
        workClosePribors()
        threadcommand=1
@@ -171,7 +171,7 @@ def workcicle():
      # подаем мощность с генератора
      genlevel=lib_kalibrovka.datakaltabl(Work_Table,5,number)
      try:
-       generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
+       generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
      except:
        workClosePribors()
        threadcommand=1
@@ -192,7 +192,7 @@ def workcicle():
         cicle =0
      if ((workdata[wdStepFreq] < 0)and (Freq <workdata[wdBeginFreq])):  # цикл вниз по частоте
         cicle =0	      
-     generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][4])
+     generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4])
      FastPause( workdata[wdworkpause])
      if (threadcommand!=0): 
         cicle=0
@@ -217,7 +217,7 @@ def kallOpenPribors():
    workdata[wdid_kalmet][0]=fieldmeter.Open(inst[1],inst[2],inst[3])
 
 def kallClosePribors():
-   generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][4])
+   generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4])
    generator.Close( workdata[wdid_gen][0]   ,workdata[wdid_gen][1])
    fieldmeter.Close(workdata[wdid_kalmet][0],workdata[wdid_kalmet][1])
 
@@ -242,8 +242,8 @@ def kallcicle():
   while (cicle ): 
      # подаем частоту с генератора
      try:
-        generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
-        generator.WriteOn(workdata[wdid_gen][0],workdata[wdid_gen][4])
+        generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
+        generator.WriteOn(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4])
      except:
        kallClosePribors()
        threadcommand=1
@@ -252,7 +252,7 @@ def kallcicle():
        return
      # устанавливаем частоту на приемнике
      try:
-        fieldmeter.WriteFreq(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4],Freq)    #handle_gen,id_gen,Freq
+        fieldmeter.WriteFreq(workdata[wdid_kalmet][0],workdata[wdid_gen][1],workdata[wdid_kalmet][4],Freq)    #handle_gen,id_gen,Freq
      except:
        threadcommand=1
        kallClosePribors()
@@ -264,7 +264,7 @@ def kallcicle():
      # подаем мощность с генератора
      genlevel=lib_kalibrovka.datakaltabl(Work_Table,2,number)
      try:
-       generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
+       generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
      except:
        threadcommand=1     
        msg = "нет связи с генератором!"
@@ -273,7 +273,7 @@ def kallcicle():
        return
      FastPause(300)
      try:
-       Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4]) # ...read....
+       Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][1],workdata[wdid_kalmet][4]) # ...read....
 
        numfreqUres=lib_kalibrovka.FindFreqNum(  workdata[wdkal_kalprobe],Freq,0) # находим коэфициент пробника ( антенны, тока...)
        Ures=Ures+lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],1,numfreqUres) # добавляем этот коэф к измеренным данным
@@ -288,7 +288,7 @@ def kallcicle():
      NumSter=0
      while flag: 
          #try:
-         #   generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
+         #   generator.WriteFreq(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4],Freq)    #handle_gen,id_gen,Freq
          #except:
          #   msg = "нет связи с генератором!"
          #   mb.showerror("Ошибка", msg)
@@ -298,12 +298,12 @@ def kallcicle():
 #         print("while:")
          NumSter=NumSter+1
 #	 # подаем мощность с генератора
-         generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
+         generator.WriteLevel(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4],genlevel)    #handle_gen,id_gen,Freq
 #         # измеряем сигнал на измерителе, добавляем его коэффициент из таблички
          try:
            #if (workdata[wdworktype]):
 	   
-           Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][4]) # ...read....
+           Ures=fieldmeter.ReadLevel(workdata[wdid_kalmet][0],workdata[wdid_kalmet][1],workdata[wdid_kalmet][4]) # ...read....
            numfreqUres=lib_kalibrovka.FindFreqNum(  workdata[wdkal_kalprobe],Freq,0) # находим коэфициент пробника ( антенны, тока...)
            print("ures+ ",lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],1,numfreqUres)) # добавляем этот коэф к измеренным данным
            Ures=Ures+lib_kalibrovka.datakaltabl(workdata[wdkal_kalprobe],1,numfreqUres) # добавляем этот коэф к измеренным данным
@@ -366,10 +366,10 @@ def kallcicle():
      #измеряем сигнал на ответвителе, добавляем его коэффициент из таблички
      #if (workdata[wdworktype]):      
      #   Uotv=0 # ...read....
-     generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][4])
+     generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4])
      FastPause( workdata[wdworkpause])
 
-  generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][4])
+  generator.WriteOff(workdata[wdid_gen][0],workdata[wdid_gen][1],workdata[wdid_gen][4])
   lib_kalibrovka.printkaltabl(Work_Table)
   kallClosePribors()
   lib_kalibrovka.printkaltabl(Work_Table)
@@ -810,12 +810,35 @@ def Kalibrovka():
           btnPause['state'] ='disabled'
           btnStop['state'] ='active'
         sleep(1.3)
-        print("+",threadcommand)
+#        print("+",threadcommand)
 	
    def CreqteNewTable():
       print("CreqteNewTable")
        
    def EditNewTable():
+      Editwindow = Toplevel( )
+      Editwindow_label_0_0="Редактирование калибровки"
+      Editwindow_l0 = Label(Editwindow,text=Editwindow_label_0_0, font="Arial 20")
+      Editwindow_l0.grid(row=0, column=0)
+
+      tree = ttk.Treeview(Editwindow, columns=( "freqmin","freqmax","step","type_step", "levelbegin", "levelend", "logfreq", "genlevel" ))
+      
+      tree.heading("freqmin", text="Начальная частота, МГц")
+      tree.heading("freqmax", text="Конечная частота, МГц")
+      tree.heading("step", text="Шаг")
+      tree.heading("type_step", text="тип шага, %,МГц")
+      tree.heading("levelbegin", text="Начальная уровень, МГц")
+      tree.heading("levelend", text="Конечный уровень, МГц")
+      tree.heading("logfreq", text="что-то , МГц")
+      tree.heading("genlevel", text="Уровань генератора, дбмВт")
+      
+      tree .grid(row=1, column=0)
+      tree.insert(parent='', index='end', iid=0, text="Label", values=("Hello", "Second Col", "Third Col"))
+
+      Editwindow .transient(root)
+      Editwindow .grab_set()
+      Editwindow .focus_set()   
+      Editwindow .wait_window() 
       print("EditNewTable")
     
    def on_Kallwindow_closing():
@@ -1162,7 +1185,7 @@ def timing_main():
        btnKallibr['state'] = 'disabled'
        btnkalltable['state'] = 'disabled'
      sleep(1.3)	
-     print("-",threadcommand)
+#     print("-",threadcommand)
 
 	
  

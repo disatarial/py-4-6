@@ -24,7 +24,7 @@ def Close(handle,interface):
       print("ClosePribors")
       handle.close()
 
-def WriteFreq(handle,ident,Freq):
+def WriteFreq(handle,interface,ident,Freq):
   if (ident==1):
       print("EP60x izmeritel")  
   elif (ident==2):
@@ -38,7 +38,7 @@ def WriteFreq(handle,ident,Freq):
       
  
  
-def ReadLevel(handle,ident):
+def ReadLevel(handle,interface,ident):
   if (ident==1): #Narda EP60X
      str1="#00?T*\r\n"
      handle.write(str1.encode())
