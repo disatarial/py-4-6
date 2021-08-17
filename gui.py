@@ -648,11 +648,11 @@ def Kalibrovka():
       config.set('workdata','EndFreq',str(label_end_freq.get()))
       #config.set('workdata','stepfreq',str(label_step_freq.get()))
       #config.set('workdata','steptype',str(combosteptype.current()))
-      file_name=labelkalltable['text']
+      file_name=klabelkalltable['text']
       #f=os.path.relpath(file_name , start='./kal')
       #print(f)
       config.set('workdata','kaltable',file_name)
-      labelkalltable.config(text = file_name)
+      klabelkalltable.config(text = file_name)
 
    def StartProdKal():
       #workdata[wdBeginFreq]= workdata[wdfreq]
@@ -697,9 +697,11 @@ def Kalibrovka():
         strdata=(strdata.split())
         for i in range(len(strdata)):
           data.append(float(strdata[i]))
-        data.insert(0,7)
+        data.insert(0,8)
 	
         Kal_Table=data
+        lib_kalibrovka.printkaltabl(Kal_Table)
+	
         LoadTable()
         Work_Table=lib_kalibrovka.CreateFreqTable (data,workdata[wdBeginFreq],workdata[wdEndFreq])
 
@@ -768,7 +770,7 @@ def Kalibrovka():
       File.close()
       f=os.path.relpath(file_name , start='./kaltable')
       config.set('workdata','kaltable',f)
-      labelkalltable.config(text = f)
+      klabelkalltable.config(text = f)
      # files = file_name
       
    def savexit():
@@ -821,19 +823,38 @@ def Kalibrovka():
       Editwindow_l0 = Label(Editwindow,text=Editwindow_label_0_0, font="Arial 20")
       Editwindow_l0.grid(row=0, column=0)
 
-      tree = ttk.Treeview(Editwindow, columns=( "freqmin","freqmax","step","type_step", "levelbegin", "levelend", "logfreq", "genlevel" ))
-      
+      tree = ttk.Treeview(Editwindow,show="headings", columns=( "freqmin","freqmax","step","type_step", "levelbegin", "levelend", "logfreq", "genlevel" ))
       tree.heading("freqmin", text="Начальная частота, МГц")
+      tree.column("freqmin", minwidth=0, width=150, stretch=NO)
       tree.heading("freqmax", text="Конечная частота, МГц")
+      tree.column("freqmax", minwidth=0, width=150, stretch=NO)
       tree.heading("step", text="Шаг")
-      tree.heading("type_step", text="тип шага, %,МГц")
+      tree.column("step", minwidth=0, width=100, stretch=NO)
+      tree.heading("type_step", text="тип шага,( %,МГц)")
+      tree.column("type_step", minwidth=0, width=150, stretch=NO)
       tree.heading("levelbegin", text="Начальная уровень, МГц")
+      tree.column("levelbegin", minwidth=0, width=150, stretch=NO)
       tree.heading("levelend", text="Конечный уровень, МГц")
-      tree.heading("logfreq", text="что-то , МГц")
-      tree.heading("genlevel", text="Уровань генератора, дбмВт")
+      tree.column("levelend", minwidth=0, width=150, stretch=NO)
+      tree.heading("logfreq", text=" линейность частоты")
+      tree.column("logfreq", minwidth=0, width=160, stretch=NO)
+      tree.heading("genlevel", text="Уровень генератора, дбмВт")
+      tree.column("genlevel", minwidth=0, width=160, stretch=NO)
       
       tree .grid(row=1, column=0)
-      tree.insert(parent='', index='end', iid=0, text="Label", values=("Hello", "Second Col", "Third Col"))
+      # загружаем  калибровочную таблицу
+      file_name=config.get('workdata','kaltable')# kal table
+      data=[]
+      File  = open("./kaltable/"+file_name)
+      strdata= File.read()
+      File .close()
+      	    
+      print(strdata)
+
+      strdata=(strdata.split())      
+#      for i in range(len(strdata)):
+      tree.insert(parent='', index='end', iid=0, text="Label", values=(strdata[0], strdata[1], strdata[2],strdata[3], strdata[4], strdata[5],strdata[6], strdata[7]))
+ #      tree.insert(parent='', index='end', iid=0, text="Label", values=("Hello", "Second Col", "Third Col"))
 
       Editwindow .transient(root)
       Editwindow .grab_set()
@@ -866,7 +887,7 @@ def Kalibrovka():
    Kallwindow_l0 = Label(Kallwindow,text=Kallwindow_label_0_0, font="Arial 20")
    Kallwindow_l0.grid(row=0, column=0,columnspan =4)
 
-   labelkalltable=Label(Kallwindow,text=config.get('workdata','kaltable'), font="Arial 12")
+   klabelkalltable=Label(Kallwindow,text=config.get('workdata','kaltable'), font="Arial 12")
 
 
    namelabel1="Частота,МГц,уровень:"
@@ -911,7 +932,7 @@ def Kalibrovka():
    l9 = Label(Kallwindow,text=namelabel9, font="Arial 12")
    l9.grid(row=7, column=0,columnspan =4)
 
-   labelkalltable.grid(row=8, column=0)
+   klabelkalltable.grid(row=8, column=0)
    btnkalltable = Button(Kallwindow,text=" Выбрать",command=btnkallTabl_clik)
    btnkalltable.grid(row=8, column=1,sticky=N+S+W+E)
 
