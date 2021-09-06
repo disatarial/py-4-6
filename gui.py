@@ -849,12 +849,16 @@ def Kalibrovka():
       strdata= File.read()
       File .close()
       	    
-      print(strdata)
+      print("strdata\r\n",strdata)
 
       strdata=(strdata.split())      
-#      for i in range(len(strdata)):
-      tree.insert(parent='', index='end', iid=0, text="Label", values=(strdata[0], strdata[1], strdata[2],strdata[3], strdata[4], strdata[5],strdata[6], strdata[7]))
- #      tree.insert(parent='', index='end', iid=0, text="Label", values=("Hello", "Second Col", "Third Col"))
+      print("strdata1\r\n",strdata, )
+      lenstr=int(len(strdata)/8)	
+      for i in range(lenstr):
+         tree.insert(parent='', index='end', iid=i, text="Label", values=(strdata[0+8*i], strdata[1+8*i], strdata[2+8*i],strdata[3+8*i], strdata[4+8*i], strdata[5+8*i],strdata[6+8*i], strdata[7+8*i]))
+
+#      tree.insert(parent='', index='end', iid=0, text="Label", values=(strdata[0], strdata[1], strdata[2],strdata[3], strdata[4], strdata[5],strdata[6], strdata[7]))
+#      tree.insert(parent='', index='end', iid=1, text="Label", values=(strdata[0], strdata[1], strdata[2],strdata[3], strdata[4], strdata[5],strdata[6], strdata[7]))
 
       Editwindow .transient(root)
       Editwindow .grab_set()
